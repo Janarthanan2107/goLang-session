@@ -13,8 +13,23 @@ type Application struct {
 
 func NewApplication() *Application {
 	return &Application{
-		Router: routes.SetupUserRouter(),
+		Router: setupRouters(),
 	}
+}
+
+func setupRouters() *gin.Engine {
+	router := gin.Default()
+
+	// User routes
+	userRouter := routes.SetupUserRouter()
+	router.Any("/users/*any", gin.WrapH(userRouter))
+
+	// if we need to add more routers add below like...
+	// example setup:
+	// productRouter := routes.SetupProductRouter()
+	// router.Any("/products/*any", gin.WrapH(productRouter))
+
+	return router
 }
 
 func (app *Application) Start() {
