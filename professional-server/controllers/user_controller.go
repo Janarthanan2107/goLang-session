@@ -2,18 +2,109 @@ package controllers
 
 import (
 	"net/http"
+	"os"
+	"strconv"
 	"user/models"
 
+	"github.com/360EntSecGroup-Skylar/excelize"
 	"github.com/gin-gonic/gin"
 )
 
 var users = []models.User{
-	{ID: "1", Username: "user1", Email: "user1@example.com"},
-	{ID: "2", Username: "user2", Email: "user2@example.com"},
+
+	{
+		ID:       "1",
+		Username: "Bret",
+		Email:    "Sincere@april.biz",
+	},
+	{
+		ID:       "2",
+		Username: "Antonette",
+		Email:    "Shanna@melissa.tv",
+	},
+	{
+		ID:       "3",
+		Username: "Samantha",
+		Email:    "Nathan@yesenia.net",
+	},
+	{
+		ID:       "4",
+		Username: "Karianne",
+		Email:    "Julianne.OConner@kory.org",
+	},
+	{
+		ID:       "5",
+		Username: "Kamren",
+		Email:    "Lucio_Hettinger@annie.ca",
+	},
+	{
+		ID:       "6",
+		Username: "Leopoldo_Corkery",
+		Email:    "Karley_Dach@jasper.info",
+	},
+	{
+		ID:       "7",
+		Username: "Elwyn.Skiles",
+		Email:    "Telly.Hoeger@billy.biz",
+	},
+	{
+		ID:       "8",
+		Username: "Maxime_Nienow",
+		Email:    "Sherwood@rosamond.me",
+	},
+	{
+		ID:       "9",
+		Username: "Delphine",
+		Email:    "Chaim_McDermott@dana.io",
+	},
+	{
+		ID:       "10",
+		Username: "Moriah.Stanton",
+		Email:    "Rey.Padberg@karina.biz",
+	},
 }
 
 func GetUsers(c *gin.Context) {
 	c.JSON(http.StatusOK, users)
+}
+
+func GetUsersExcel(c *gin.Context) {
+	file := excelize.NewFile()
+
+	// Create a new sheet
+	index := file.NewSheet("Users")
+
+	// Set headers
+	headers := []string{"ID", "Username", "Email"}
+	for col, header := range headers {
+		cell := excelize.ToAlphaString(col) + "1"
+		file.SetCellValue("Users", cell, header)
+	}
+
+	// Set data
+	for row, user := range users {
+		file.SetCellValue("Users", "A"+strconv.Itoa(row+2), user.ID)
+		file.SetCellValue("Users", "B"+strconv.Itoa(row+2), user.Username)
+		file.SetCellValue("Users", "C"+strconv.Itoa(row+2), user.Email)
+	}
+
+	// Set active sheet of the workbook
+	file.SetActiveSheet(index)
+
+	// Save the XLSX file to a temporary location
+	tempFile := "users.xlsx"
+	if err := file.SaveAs(tempFile); err != nil {
+		c.AbortWithStatus(http.StatusInternalServerError)
+		return
+	}
+	defer os.Remove(tempFile)
+
+	// Set headers for file download
+	c.Header("Content-Type", "application/octet-stream")
+	c.Header("Content-Disposition", "attachment; filename=users.xlsx")
+
+	// Stream the file to the client
+	c.File(tempFile)
 }
 
 func GetUserByID(c *gin.Context) {

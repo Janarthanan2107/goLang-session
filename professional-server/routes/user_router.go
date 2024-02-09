@@ -21,6 +21,7 @@ func SetupUserRouter() *gin.Engine {
 	{
 		userGroup.GET("/", controllers.GetUsers)
 		userGroup.GET("/:id", controllers.GetUserByID)
+		userGroup.GET("/excel", controllers.GetUsersExcel)
 		userGroup.POST("/", controllers.CreateUser)
 		userGroup.PUT("/:id", controllers.UpdateUser)
 		userGroup.DELETE("/:id", controllers.DeleteUser)
