@@ -107,6 +107,16 @@ func GetUsersExcel(c *gin.Context) {
 	c.File(tempFile)
 }
 
+func GetUserHtml(c *gin.Context) {
+	// Assuming you want to pass a username to the HTML template
+	// username := "John Doe"
+
+	// Render the HTML template with the data
+	c.HTML(http.StatusOK, "report.html", gin.H{
+		"Users": users,
+	})
+}
+
 func GetUserByID(c *gin.Context) {
 	id := c.Param("id")
 	for _, user := range users {
