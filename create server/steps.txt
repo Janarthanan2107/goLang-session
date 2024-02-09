@@ -1,0 +1,9 @@
+step one : go mod init example/foldername
+
+step two : go get github.com/gin-gonic/gin
+
+step three : need to import what are the modules we need on top like fmt,net/http,gin
+
+step four : need to create a struct
+
+step five : 
