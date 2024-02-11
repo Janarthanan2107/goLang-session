@@ -1,145 +1,116 @@
 package controllers
 
 import (
+	"context"
+	"log"
 	"net/http"
-	"os"
-	"strconv"
+	"time"
 	"user/models"
 
-	"github.com/360EntSecGroup-Skylar/excelize"
 	"github.com/gin-gonic/gin"
+	"go.mongodb.org/mongo-driver/bson"
+	"go.mongodb.org/mongo-driver/bson/primitive"
+	"go.mongodb.org/mongo-driver/mongo"
 )
 
-var users = []models.User{
+var (
+	usersCollection *mongo.Collection
+)
 
-	{
-		ID:       "1",
-		Username: "Bret",
-		Email:    "Sincere@april.biz",
-	},
-	{
-		ID:       "2",
-		Username: "Antonette",
-		Email:    "Shanna@melissa.tv",
-	},
-	{
-		ID:       "3",
-		Username: "Samantha",
-		Email:    "Nathan@yesenia.net",
-	},
-	{
-		ID:       "4",
-		Username: "Karianne",
-		Email:    "Julianne.OConner@kory.org",
-	},
-	{
-		ID:       "5",
-		Username: "Kamren",
-		Email:    "Lucio_Hettinger@annie.ca",
-	},
-	{
-		ID:       "6",
-		Username: "Leopoldo_Corkery",
-		Email:    "Karley_Dach@jasper.info",
-	},
-	{
-		ID:       "7",
-		Username: "Elwyn.Skiles",
-		Email:    "Telly.Hoeger@billy.biz",
-	},
-	{
-		ID:       "8",
-		Username: "Maxime_Nienow",
-		Email:    "Sherwood@rosamond.me",
-	},
-	{
-		ID:       "9",
-		Username: "Delphine",
-		Email:    "Chaim_McDermott@dana.io",
-	},
-	{
-		ID:       "10",
-		Username: "Moriah.Stanton",
-		Email:    "Rey.Padberg@karina.biz",
-	},
+// Initialize MongoDB collection
+func InitMongoDBCollection(client *mongo.Client) {
+	usersCollection = client.Database("practice").Collection("users")
 }
 
+// GetUsers retrieves all users from MongoDB
 func GetUsers(c *gin.Context) {
+	var users []models.User
+
+	// Create a context with timeout
+	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+	defer cancel()
+
+	// Find all users in the collection
+	cursor, err := usersCollection.Find(ctx, bson.M{})
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to fetch users"})
+		return
+	}
+	defer cursor.Close(ctx)
+
+	// Iterate over the cursor and decode each user into a User struct
+	for cursor.Next(ctx) {
+		var user models.User
+		if err := cursor.Decode(&user); err != nil {
+			c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to decode user"})
+			return
+		}
+		users = append(users, user)
+	}
+
+	if err := cursor.Err(); err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "Cursor error"})
+		return
+	}
+
 	c.JSON(http.StatusOK, users)
 }
 
-func GetUsersExcel(c *gin.Context) {
-	file := excelize.NewFile()
-
-	// Create a new sheet
-	index := file.NewSheet("Users")
-
-	// Set headers
-	headers := []string{"ID", "Username", "Email"}
-	for col, header := range headers {
-		cell := excelize.ToAlphaString(col) + "1"
-		file.SetCellValue("Users", cell, header)
-	}
-
-	// Set data
-	for row, user := range users {
-		file.SetCellValue("Users", "A"+strconv.Itoa(row+2), user.ID)
-		file.SetCellValue("Users", "B"+strconv.Itoa(row+2), user.Username)
-		file.SetCellValue("Users", "C"+strconv.Itoa(row+2), user.Email)
-	}
-
-	// Set active sheet of the workbook
-	file.SetActiveSheet(index)
-
-	// Save the XLSX file to a temporary location
-	tempFile := "users.xlsx"
-	if err := file.SaveAs(tempFile); err != nil {
-		c.AbortWithStatus(http.StatusInternalServerError)
-		return
-	}
-	defer os.Remove(tempFile)
-
-	// Set headers for file download
-	c.Header("Content-Type", "application/octet-stream")
-	c.Header("Content-Disposition", "attachment; filename=users.xlsx")
-
-	// Stream the file to the client
-	c.File(tempFile)
-}
-
-func GetUserHtml(c *gin.Context) {
-	// Assuming you want to pass a username to the HTML template
-	// username := "John Doe"
-
-	// Render the HTML template with the data
-	c.HTML(http.StatusOK, "report.html", gin.H{
-		"Users": users,
-	})
-}
-
+// GetUserByID retrieves a user by ID from MongoDB
 func GetUserByID(c *gin.Context) {
 	id := c.Param("id")
-	for _, user := range users {
-		if user.ID == id {
-			c.JSON(http.StatusOK, user)
+
+	// Convert the ID string to an ObjectID
+	objID, err := primitive.ObjectIDFromHex(id)
+	if err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "Invalid ID format"})
+		return
+	}
+
+	// Create a context with timeout
+	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+	defer cancel()
+
+	// Find the user by ID
+	var user models.User
+	err = usersCollection.FindOne(ctx, bson.M{"_id": objID}).Decode(&user)
+	if err != nil {
+		if err == mongo.ErrNoDocuments {
+			log.Println("User not found in MongoDB collection.")
+			c.JSON(http.StatusNotFound, gin.H{"error": "User not found"})
 			return
 		}
+		log.Println("Error retrieving user from MongoDB:", err)
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "Internal server error"})
+		return
 	}
-	c.JSON(http.StatusNotFound, gin.H{"error": "User not found"})
+
+	c.JSON(http.StatusOK, user)
 }
 
+// CreateUser creates a new user in MongoDB
 func CreateUser(c *gin.Context) {
 	var newUser models.User
 	if err := c.ShouldBindJSON(&newUser); err != nil {
 		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
 		return
 	}
-	// Generate a unique ID for the new user (You might use UUID or any other method)
-	newUser.ID = "3" // For simplicity, manually setting ID to "3"
-	users = append(users, newUser)
-	c.JSON(http.StatusCreated, newUser)
+
+	// Create a context with timeout
+	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+	defer cancel()
+
+	// Insert the new user into the collection
+	_, err := usersCollection.InsertOne(ctx, newUser)
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to create user"})
+		return
+	}
+
+	c.JSON(http.StatusCreated, gin.H{"message": "User successfully created"})
 }
 
+// UpdateUser updates a user in MongoDB
 func UpdateUser(c *gin.Context) {
 	id := c.Param("id")
 	var updatedUser models.User
@@ -147,27 +118,72 @@ func UpdateUser(c *gin.Context) {
 		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
 		return
 	}
-	for i, user := range users {
-		if user.ID == id {
-			// Update user details
-			users[i].Username = updatedUser.Username
-			users[i].Email = updatedUser.Email
-			c.JSON(http.StatusOK, users[i])
-			return
-		}
+
+	// Convert string ID to ObjectId
+	objID, err := primitive.ObjectIDFromHex(id)
+	if err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "Invalid ID format"})
+		return
 	}
-	c.JSON(http.StatusNotFound, gin.H{"error": "User not found"})
+
+	// Create a context with timeout
+	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+	defer cancel()
+
+	// Define filter by ID
+	filter := bson.M{"_id": objID}
+
+	// Define update operation
+	update := bson.M{"$set": bson.M{
+		"username": updatedUser.Username,
+		"email":    updatedUser.Email,
+	}}
+
+	// Perform update operation
+	result, err := usersCollection.UpdateOne(ctx, filter, update)
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to update user"})
+		return
+	}
+
+	// Check if user was found and updated
+	if result.ModifiedCount == 0 {
+		c.JSON(http.StatusNotFound, gin.H{"error": "User not found"})
+		return
+	}
+
+	// Return updated user
+	c.JSON(http.StatusOK, gin.H{"message": "User successfully updated"})
 }
 
+// DeleteUser deletes a user from MongoDB
 func DeleteUser(c *gin.Context) {
 	id := c.Param("id")
-	for i, user := range users {
-		if user.ID == id {
-			// Remove user from the slice
-			users = append(users[:i], users[i+1:]...)
-			c.JSON(http.StatusOK, gin.H{"message": "User deleted successfully"})
-			return
-		}
+
+	// Convert string ID to ObjectId
+	objID, err := primitive.ObjectIDFromHex(id)
+	if err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "Invalid ID format"})
+		return
 	}
-	c.JSON(http.StatusNotFound, gin.H{"error": "User not found"})
+
+	// Create a context with timeout
+	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+	defer cancel()
+
+	// Define filter by ID
+	filter := bson.M{"_id": objID}
+
+	// Delete the user from the collection
+	result, err := usersCollection.DeleteOne(ctx, filter)
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to delete user"})
+		return
+	}
+	if result.DeletedCount == 0 {
+		c.JSON(http.StatusNotFound, gin.H{"error": "User not found"})
+		return
+	}
+
+	c.JSON(http.StatusOK, gin.H{"message": "User deleted successfully"})
 }
