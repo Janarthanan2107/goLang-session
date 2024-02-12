@@ -14,8 +14,6 @@ func root(c *gin.Context) {
 func SetupUserRouter() *gin.Engine {
 	router := gin.Default()
 
-	router.GET("/", root)
-
 	// // Load HTML templates from the "templates" directory
 	// router.LoadHTMLGlob("templates/*")
 

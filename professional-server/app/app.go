@@ -2,6 +2,7 @@ package app
 
 import (
 	"fmt"
+	"net/http"
 	"user/routes"
 
 	"github.com/gin-gonic/gin"
@@ -12,24 +13,30 @@ type Application struct {
 }
 
 func NewApplication() *Application {
-	return &Application{
-		Router: setupRouters(),
-	}
+	return &Application{}
 }
 
-func setupRouters() *gin.Engine {
+func (app *Application) SetupRouter() {
+	// Create a main router
 	router := gin.Default()
 
-	// User routes
+	// Set up root route
+	router.GET("/", func(c *gin.Context) {
+		c.JSON(http.StatusOK, gin.H{
+			"message": "Welcome to the server",
+		})
+	})
+
+	// Set up user routes
 	userRouter := routes.SetupUserRouter()
 	router.Any("/users/*any", gin.WrapH(userRouter))
 
-	// if we need to add more routers add below like...
-	// example setup:
+	// example:
+	// Set up product routes
 	// productRouter := routes.SetupProductRouter()
 	// router.Any("/products/*any", gin.WrapH(productRouter))
 
-	return router
+	app.Router = router
 }
 
 func (app *Application) Start() {

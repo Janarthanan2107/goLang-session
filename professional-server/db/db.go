@@ -2,28 +2,27 @@ package db
 
 import (
 	"context"
+
 	"go.mongodb.org/mongo-driver/mongo"
 	"go.mongodb.org/mongo-driver/mongo/options"
-	"log"
 )
 
+// ConnectToMongoDB connects to MongoDB and returns a client instance
 func ConnectToMongoDB() (*mongo.Client, error) {
-	// Set client options
-	clientOptions := options.Client().ApplyURI("mongodb+srv://janarthanan:janarthanan2103@cluster-db.sndm3lz.mongodb.net/practice?retryWrites=true&w=majority")
+	// MongoDB connection URI
+	uri := "mongodb+srv://janarthanan:janarthanan2103@cluster-db.sndm3lz.mongodb.net/practice?retryWrites=true&w=majority"
 
-	// Connect to MongoDB
-	client, err := mongo.Connect(context.Background(), clientOptions)
+	// Create a new MongoDB client
+	client, err := mongo.Connect(context.Background(), options.Client().ApplyURI(uri))
 	if err != nil {
 		return nil, err
 	}
 
-	// Check the connection
+	// Ping the MongoDB server to check if the connection was successful
 	err = client.Ping(context.Background(), nil)
 	if err != nil {
 		return nil, err
 	}
-
-	log.Println("Connected to MongoDB!")
 
 	return client, nil
 }
